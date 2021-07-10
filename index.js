@@ -1,7 +1,9 @@
 import { ApolloServer, gql, UserInputError } from 'apollo-server';
 import mongoose from 'mongoose';
+import jwt from 'jsonwebtoken';
 import Author from './models/Author.js';
 import Book from './models/Book.js';
+import User from './models/User.js';
 
 const MONGODB_URI =
 	'mongodb+srv://user_1:thienan123@cluster0.dgh39.mongodb.net/graphQL?retryWrites=true&w=majority';
@@ -77,7 +79,9 @@ const resolvers = {
 				return Book.find({ author: args.author });
 			}
 			if (args.genre) {
-				return Book.find({ genres: { $in: [args.genre] } });
+				return Book.find({ genres: { $in: [args.genre] } }).populate(
+					'author',
+				);
 			}
 
 			if (args.author && args.genre) {
@@ -86,7 +90,7 @@ const resolvers = {
 					genres: { $in: [args.genre] },
 				});
 			}
-			return Book.find({});
+			return Book.find({}).populate('author');
 		},
 		allAuthors: () => Author.find({}),
 		me: (root, args, context) => {
@@ -115,8 +119,8 @@ const resolvers = {
 			}
 
 			// Checking if the author exist, if no, insert author to author collection
-			let foundAuthor = await Author.findOne({ name: args.author });
-			if (!foundAuthor) {
+			let author = await Author.findOne({ name: args.author });
+			if (!author) {
 				const newAuthor = new Author({
 					name: args.author,
 				});
@@ -128,8 +132,9 @@ const resolvers = {
 					});
 				}
 			}
+			author = await Author.findOne({ name: args.author });
 
-			const newBook = new Book({ ...args });
+			const newBook = new Book({ ...args, author: author });
 			try {
 				await newBook.save();
 			} catch (error) {
@@ -148,14 +153,15 @@ const resolvers = {
 			if (!author) {
 				return null;
 			}
-			author.born = args.setBornTo;
-			const updatedAuthor = await Author.findByIdAndUpdate(
-				author._id,
-				{ ...author, _id, born: args.setBornTo },
-				{ new: true },
-			);
 
-			return updatedAuthor;
+			author.born = args.setBornTo;
+			// const updatedAuthor = await Author.findByIdAndUpdate(
+			// 	author._id,
+			// 	{ ...author },
+			// 	{ new: true },
+			// );
+
+			return await author.save();
 		},
 
 		createUser: (root, args) => {
